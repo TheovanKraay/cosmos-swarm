@@ -6,10 +6,7 @@ We use Azure Cosmos DB to store customer information and transaction data.
 
 ## Demo
 
-<video width="600" controls autoplay>
-  <source src="./media/demo.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![Demo](./media/demo.gif)
 
 ## Overview
 
