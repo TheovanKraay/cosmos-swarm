@@ -1,8 +1,8 @@
 # Multi-agent AI sample with Azure Cosmos DB
 
 A personal shopping agent that can help with making sales and refunding orders.
-This example uses the helper function `run_demo_loop`, which allows us to create an interactive Swarm session.
-We use Azure Cosmos DB to store customer information and transaction data.
+This example uses the helper function `run_demo_loop`, which allows us to create an interactive [OpenAI Swarm](https://github.com/openai/swarm) session.
+We use [Azure Cosmos DB](https://learn.microsoft.com/azure/cosmos-db/introduction) to store customer information and transaction data.
 
 ## Demo
 
