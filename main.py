@@ -1,9 +1,21 @@
 import datetime
+import os
 import random
 
 import cosmosdb
-from swarm import Agent
+from swarm import Swarm, Agent
 from swarm.repl import run_demo_loop
+from openai import AzureOpenAI
+
+# Azure OpenAI API configuration
+aoai_client = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    api_version="2024-09-01-preview",
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+)
+
+# Initialize Swarm client with Azure OpenAI client
+swarm_client = Swarm(client=aoai_client)
 
 
 def refund_item(user_id, item_id):

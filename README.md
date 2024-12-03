@@ -29,7 +29,8 @@ Ensure you have the following environment variables set:
 ```shell
 AZURE_COSMOSDB_ENDPOINT=your_cosmosdb_account_uri
 AZURE_COSMOSDB_KEY=your_cosmosdb_account_key
-OPENAI_API_KEY=your_openai_api_key
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key
+AZURE_OPENAI_ENDPOINT=your_azure_openai_endpoint
 ```
 
 Once you have installed dependencies and Swarm, run the example using:
