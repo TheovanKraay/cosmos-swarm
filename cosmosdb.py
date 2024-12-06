@@ -1,6 +1,9 @@
 import os
+import json
 
 from azure.cosmos import CosmosClient, PartitionKey, exceptions
+from openai import AzureOpenAI
+
 
 # Initialize the Cosmos client
 # reference environment variables for the values of these variables
@@ -9,10 +12,22 @@ key = os.environ['AZURE_COSMOSDB_KEY']
 client = CosmosClient(endpoint, key)
 
 # Database and container names
-database_name = "PersonalShopperDB"
+database_name = "MultiAgentDemoDB"
 users_container_name = "Users"
 purchase_history_container_name = "PurchaseHistory"
 products_container_name = "Products"
+
+aoai_client = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    api_version="2024-09-01-preview",
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+)
+
+def generate_embedding(text):
+    response = aoai_client.embeddings.create(input=text, model="text-embedding-ada-002")
+    json_response = response.model_dump_json(indent=2)
+    parsed_response = json.loads(json_response)
+    return parsed_response['data'][0]['embedding']
 
 # Create database and containers if they don't exist
 def create_database():
@@ -28,10 +43,36 @@ def create_database():
             partition_key=PartitionKey(path="/user_id"),
             offer_throughput=400
         )
+        vector_embedding_policy = {
+            "vectorEmbeddings": [
+                {
+                    "path": "/product_description_vector",
+                    "dataType": "float32",
+                    "distanceFunction": "cosine",
+                    "dimensions": 1536
+                },
+            ]
+        }
+        diskann_indexing_policy = {
+            "includedPaths": [
+                {"path": "/*"}
+            ],
+            "excludedPaths": [
+                {"path": "/\"_etag\"/?"}
+            ],
+            "vectorIndexes": [
+                {
+                    "path": "/product_description_vector",
+                    "type": "diskANN",
+                }
+            ]
+        }
         products_container = database.create_container_if_not_exists(
             id=products_container_name,
             partition_key=PartitionKey(path="/product_id"),
-            offer_throughput=400
+            offer_throughput=400,
+            vector_embedding_policy=vector_embedding_policy,
+            indexing_policy=diskann_indexing_policy
         )
     except exceptions.CosmosHttpResponseError as e:
         print(f"Database creation failed: {e}")
@@ -67,13 +108,16 @@ def add_purchase(user_id, date_of_purchase, item_id, amount):
     except exceptions.CosmosResourceExistsError:
         print(f"Purchase already exists for user_id {user_id} on {date_of_purchase} for item_id {item_id}.")
 
-def add_product(product_id, product_name, price):
+def add_product(product_id, product_name, product_description, price):
     database = client.get_database_client(database_name)
     container = database.get_container_client(products_container_name)
+    product_description_vector = generate_embedding(product_description)
     product = {
         "id": str(product_id),
         "product_id": product_id,
         "product_name": product_name,
+        "product_description": product_description,
+        "product_description_vector": product_description_vector,
         "price": price
     }
     try:
@@ -89,6 +133,9 @@ def preview_table(container_name):
         enable_cross_partition_query=True
     )
     for item in items:
+        if (container_name == products_container_name):
+            # redact the product description vector
+            item.pop("product_description_vector", None)
         print(item)
 
 # Initialize and load database
@@ -117,9 +164,32 @@ def initialize_database():
         add_purchase(*purchase)
 
     initial_products = [
-        (7, "Hat", 19.99),
-        (8, "Wool socks", 29.99),
-        (9, "Shoes", 39.99),
+        (7, "Hat", "A hat is a stylish and functional accessory designed to shield the "
+                   "head from the elements while adding a touch of personality to any outfit. "
+                   "Crafted from materials such as wool, cotton, straw, or synthetic blends, hats come "
+                   "in a variety of shapes and designs, from wide-brimmed sun hats to snug beanies and classic fedoras. "
+                   "They offer versatile use, providing protection from sun, rain, or cold while serving as a "
+                   "fashionable statement piece. Whether for outdoor adventures, formal occasions, "
+                   "or casual outings, a hat combines practicality and style, making it a "
+                   "timeless wardrobe essential", 19.99),
+        (8, "Wool socks", "Wool socks are premium, cozy footwear accessories designed "
+                          "to provide exceptional warmth, comfort, and moisture-wicking properties. "
+                          "Made from natural wool fibers, they are ideal for keeping feet insulated in "
+                          "cold weather while remaining breathable in warmer conditions. These socks are soft, "
+                          "durable, and naturally odor-resistant, making them perfect for everyday wear, "
+                          "outdoor adventures, or lounging at home. With their ability to regulate "
+                          "temperature and cushion feet, wool socks offer unparalleled comfort, "
+                          "making them an essential addition to any wardrobe, whether for hiking, working, "
+                          "or simply relaxing.",29.99),
+        (9, "Shoes","Shoes are versatile footwear designed to protect and comfort "
+                    "the feet while enabling effortless movement and style. They "
+                    "come in a wide range of designs, materials, and functions, catering "
+                    "to various activities, from formal occasions to rugged outdoor adventures. "
+                    "Crafted from durable materials such as leather, canvas, or synthetic blends, "
+                    "shoes provide support, cushioning, and stability through features like rubber soles, "
+                    "padded insoles, and secure fastenings. Available in diverse styles such as sneakers, boots, "
+                    "sandals, and dress shoes, they blend functionality with aesthetic appeal, making them a staple "
+                    "for every wardrobe",39.99),
     ]
 
     for product in initial_products:
